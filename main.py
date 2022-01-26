@@ -1,7 +1,8 @@
 from typing import Optional
-
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseSettings, Field, BaseModel
+from starlette.responses import RedirectResponse
 from tortoise.contrib.fastapi import HTTPNotFoundError, register_tortoise
 from tortoise.exceptions import DoesNotExist
 
@@ -10,10 +11,24 @@ from zk import FingerPrint
 
 class Settings (BaseSettings):
     zk:FingerPrint = Field(default_factory=lambda : FingerPrint())
+    connected_device:int=-1
+    is_connected:bool=False
+
 app = FastAPI()
 
 settings=Settings()
 
+origins = [
+    "http://localhost:3000",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class FingerPrintMatchRequest(BaseModel):
     name:str
@@ -22,30 +37,52 @@ class FingerPrintMatchRequest(BaseModel):
 
 @app.on_event('startup')
 async def on_startup() -> None:
+    pass
     FingerPrint.init_db()
-    settings.zk.open_device(0)
+    FingerPrint.re_init()
+    # settings.zk.open_device(0)
 
 
 @app.on_event('shutdown')
 async def on_shutdown() -> None:
+    pass
     FingerPrint.close_db()
-    settings.zk.close_device()
+    # settings.zk.close_device()
 
 @app.get("/")
-async def read_root():
-    return {"Hello": "World"}
+async def home():
+    response = RedirectResponse(url='http://localhost:3000/#/')
+    return response
 
+@app.get("/settings")
+def app_settings():
+    return {
+        "device":settings.connected_device,
+        "connected":settings.is_connected
+    }
 
 @app.get("/devices")
-async def read_item():
+async def devices():
+    FingerPrint.re_init()
     devices=settings.zk.available_devices()
-    print(f"found devices {devices}")
-    return {"devices": devices}
+    if devices>0:
+        return {
+            "success":True,
+            "devices": devices
+        }
+    else:
+        return {
+            "success": False,
+            "message":"Unable to connect to device",
+            "devices": devices
+        }
 
 @app.get("/connect/{id}")
-async def read_item(id:int):
+async def connect(id:int):
     try:
         settings.zk.open_device(id)
+        settings.connected_device=id
+        settings.is_connected=True
         return {"success":True}
     except Exception as e:
         raise e
@@ -54,6 +91,18 @@ async def read_item(id:int):
             "message":e
         })
 
+@app.post("/disconnect")
+async def disconnect():
+    try:
+        settings.zk.close_device()
+        settings.is_connected=False
+        settings.connected_device=-1
+        return {"success":True}
+    except Exception as e:
+        return HTTPException(status_code=400, detail={
+            "success":False,
+            "message":e
+        })
 
 @app.get("/save/{name}")
 async def save_template(name:str):

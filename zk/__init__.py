@@ -19,6 +19,11 @@ class FingerPrint(object):
             libzkfp.zkfp_terminate()
 
 
+    @classmethod
+    def re_init(cls):
+        libzkfp.zkfp_init()
+
+
     def __init__(self, *args, **kwargs):
         self.device=None
         self.height=None
