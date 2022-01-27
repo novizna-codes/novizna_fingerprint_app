@@ -1,4 +1,6 @@
 from typing import Optional
+
+import uvicorn
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseSettings, Field, BaseModel
@@ -9,9 +11,14 @@ from starlette.templating import Jinja2Templates
 from tortoise.contrib.fastapi import HTTPNotFoundError, register_tortoise
 from tortoise.exceptions import DoesNotExist
 import mimetypes
-mimetypes.init()
+
 from models import FingerPrintModel
 from zk import FingerPrint
+
+mimetypes.init()
+mimetypes.add_type('application/javascript', '.js')
+mimetypes.add_type('text/css', '.css')
+mimetypes.add_type('image/svg+xml', '.svg')
 
 class Settings (BaseSettings):
     zk:FingerPrint = Field(default_factory=lambda : FingerPrint())
@@ -38,9 +45,9 @@ class FingerPrintMatchRequest(BaseModel):
     name:str
     template:str
 
-app.mount("/dist", StaticFiles(directory="dist/"), name="dist")
-app.mount("/assets", StaticFiles(directory="dist/assets/"), name="assets")
-templates = Jinja2Templates(directory="dist")
+app.mount("/data", StaticFiles(directory="data/"), name="data")
+app.mount("/assets", StaticFiles(directory="data/assets/"), name="assets")
+templates = Jinja2Templates(directory="data")
 
 
 @app.on_event('startup')
@@ -61,11 +68,9 @@ async def on_shutdown() -> None:
 # async def home():
 #     response = RedirectResponse(url='http://localhost:3000/#/')
 #     return response
+
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
-    mimetypes.add_type('application/javascript', '.js')
-    mimetypes.add_type('text/css', '.css')
-    mimetypes.add_type('image/svg+xml', '.svg')
     return templates.TemplateResponse("index.html", {"request": request})
 
 @app.get("/settings")
@@ -169,3 +174,6 @@ register_tortoise(
     generate_schemas=True,
     add_exception_handlers=True,
 )
+
+if __name__ == '__main__':
+    uvicorn.run(app)

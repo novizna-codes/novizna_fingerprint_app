@@ -16,5 +16,6 @@ pystray = "^0.19.2"
 [tool.poetry.dev-dependencies]
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["poetry-core>=1.0.0","nuitka"]
+build-backend = "nuitka.distutils.Build"
+#python -m nuitka --standalone main.py --follow-imports --include-package=anyio --include-package=tortoise --include-package=websockets --include-data-file=libzkfp.cp39-win_amd64.pyd=libzkfp.cp39-win_amd64.pyd --include-data-dir=data=data
