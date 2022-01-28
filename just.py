@@ -7,7 +7,7 @@ def main():
     check_versions()
     sys.excepthook = cef.ExceptHook  # To shutdown all CEF processes on error
     cef.Initialize()
-    cef.CreateBrowserSync(url="http://127.0.0.1:8000/",
+    cef.CreateBrowserSync(url="www.google.com",
                           window_title="Finger Sense")
     cef.MessageLoop()
     cef.Shutdown()

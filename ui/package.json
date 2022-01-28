@@ -3,12 +3,14 @@
   "version": "0.0.0",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc --noEmit && vite build",
+    "build": "vite build",
+    "build-tsc": "vue-tsc --noEmit --resolveJsonModule &&  vite build",
     "preview": "vite preview"
   },
   "dependencies": {
     "@lottiefiles/lottie-player": "^1.5.4",
     "@vicons/ionicons5": "^0.11.0",
+    "@vitejs/plugin-legacy": "^1.6.4",
     "axios": "^0.25.0",
     "lottie-vuejs": "^0.4.0",
     "reconnecting-websocket": "^4.4.0",
@@ -31,5 +33,11 @@
     "vfonts": "0.0.3",
     "vite": "^2.7.2",
     "vue-tsc": "^0.29.8"
-  }
+  },
+  "browserslist": [
+    "last 1 version",
+    "> 1%",
+    "IE 10",
+    "chrome >= 63"
+  ]
 }

@@ -22,6 +22,8 @@ mimetypes.add_type('application/javascript', '.js')
 mimetypes.add_type('text/css', '.css')
 mimetypes.add_type('image/svg+xml', '.svg')
 
+window=None
+window_callback=None
 class Settings (BaseSettings):
     zk:FingerPrint = Field(default_factory=lambda : FingerPrint())
     connected_device:int=-1
@@ -58,6 +60,7 @@ settings=Settings()
 
 origins = [
     "http://localhost:3000",
+    "http://127.0.0.1:8000"
 ]
 
 app.add_middleware(
@@ -157,6 +160,8 @@ async def save_template(name:str):
     except DoesNotExist as e:
         instance=FingerPrintModel()
         instance.name=name
+    window_callback(window)
+
     await socket_manager.broadcast({
         "type": "START_FINGERPRINT_SCAN"
     })
@@ -183,6 +188,7 @@ async def match_fingerprint(data:FingerPrintMatchRequest):
     instance=await FingerPrintModel.get(name=data.name)
     saved_template=instance.template
     if settings.zk.is_connected():
+        window_callback(window)
         await socket_manager.broadcast({
             "type": "START_FINGERPRINT_SCAN"
         })
@@ -224,6 +230,11 @@ register_tortoise(
     generate_schemas=True,
     add_exception_handlers=True,
 )
+def start_fast_api(window_handler,window_object):
+    global window,window_callback
+    window_callback=window_handler
+    window=window_object
+    uvicorn.run(app)
 
 if __name__ == '__main__':
     uvicorn.run(app)
