@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List, Dict
 
 import uvicorn
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,6 +8,8 @@ from starlette.requests import Request
 from starlette.responses import RedirectResponse, HTMLResponse
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
+from starlette.websockets import WebSocket, WebSocketDisconnect
+from tortoise import manager
 from tortoise.contrib.fastapi import HTTPNotFoundError, register_tortoise
 from tortoise.exceptions import DoesNotExist
 import mimetypes
@@ -24,6 +26,31 @@ class Settings (BaseSettings):
     zk:FingerPrint = Field(default_factory=lambda : FingerPrint())
     connected_device:int=-1
     is_connected:bool=False
+
+class WebSocketManager:
+
+    def __init__(self, *args, **kwargs):
+        self.active_connections:List[WebSocket]=[]
+
+    async def connect(self,websocket:WebSocket,connection_id=None):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    async def disconnect(self,websocket:WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def send_message(self,message:Dict,websocket:WebSocket):
+        await websocket.send_json(message)
+
+
+    async def broadcast(self,message:Dict):
+        for connection in self.active_connections:
+            await connection.send_json(message)
+
+
+socket_manager=WebSocketManager()
+
+
 
 app = FastAPI()
 
@@ -130,10 +157,16 @@ async def save_template(name:str):
     except DoesNotExist as e:
         instance=FingerPrintModel()
         instance.name=name
+    await socket_manager.broadcast({
+        "type": "START_FINGERPRINT_SCAN"
+    })
     template = settings.zk.get_finger_print()
 
     if template:
         instance.template=template
+        await socket_manager.broadcast({
+            "type": "SAVED_FINGERPRINT_SCAN"
+        })
         await instance.save()
         return {
             "success":True,
@@ -150,8 +183,15 @@ async def match_fingerprint(data:FingerPrintMatchRequest):
     instance=await FingerPrintModel.get(name=data.name)
     saved_template=instance.template
     if settings.zk.is_connected():
+        await socket_manager.broadcast({
+            "type": "START_FINGERPRINT_SCAN"
+        })
         current_template=settings.zk.get_finger_print()
         result=FingerPrint.match_finger_templates(template_1=current_template,template_2=saved_template)
+        await socket_manager.broadcast({
+            "type": "FINISH_FINGERPRINT_SCAN",
+            "result":result
+        })
         return {
             "success":True,
             "match":result
@@ -166,6 +206,16 @@ async def match_fingerprint(data:FingerPrintMatchRequest):
 
         )
 
+@app.websocket("/socket")
+async def sockets(websocket:WebSocket):
+    await socket_manager.connect(websocket)
+    try:
+        while True:
+            data=await websocket.receive_json()
+            print(data)
+            await socket_manager.broadcast({"Hello":"Received"})
+    except WebSocketDisconnect:
+        await socket_manager.disconnect(websocket)
 
 register_tortoise(
     app,

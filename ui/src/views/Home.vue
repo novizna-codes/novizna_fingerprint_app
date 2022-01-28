@@ -11,6 +11,8 @@
         </n-breadcrumb>
       </template>
       <div>
+        <n-divider></n-divider>
+        <FingerPrint :status="status"/>
         <n-divider/>
         <n-button @click="disconnectDevice" block type="error">Disconnect</n-button>
       </div>
@@ -66,10 +68,43 @@
 </template>
 
 <script lang="ts">
-import { Options, Vue } from 'vue-class-component';
+import {Options, Vue} from 'vue-class-component';
 import {client} from "@/utils/api";
+import FingerPrint from "@/components/FingerPrint.vue"
+import ReconnectingWebSocket from 'reconnecting-websocket';
+import {FingerPrintScanStates, WEBSOCKET_EVENTS} from "@/utils/enums";
 
+@Options(
+    {
+        components:{
+          FingerPrint
+        }
+    }
+)
 export default class Home extends Vue {
+
+  socket:ReconnectingWebSocket=null
+  status:FingerPrintScanStates=FingerPrintScanStates.IDLE
+
+  created(){
+    this.socket=new ReconnectingWebSocket("ws://127.0.0.1:8000/socket")
+    this.socket.addEventListener("message",(event)=>{
+      const data=JSON.parse(event.data)
+      if(data.type){
+        if(WEBSOCKET_EVENTS.START_FINGERPRINT_SCAN==data.type){
+          this.status=FingerPrintScanStates.SCANNING
+        }else if(WEBSOCKET_EVENTS.FINISH_FINGERPRINT_SCAN==data.type){
+          this.status=FingerPrintScanStates.SCAN_SUCCESS
+        }else if(WEBSOCKET_EVENTS.SAVED_FINGERPRINT_SCAN==data.type){
+          this.status=FingerPrintScanStates.SCAN_SUCCESS
+          setTimeout(()=>{
+            this.status=FingerPrintScanStates.IDLE
+          },5000)
+        }
+      }
+    })
+  }
+
   get device(){
     return this.$store.getters['device']
   }

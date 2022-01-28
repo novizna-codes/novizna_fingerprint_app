@@ -7,8 +7,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@lottiefiles/lottie-player": "^1.5.4",
     "@vicons/ionicons5": "^0.11.0",
     "axios": "^0.25.0",
+    "lottie-vuejs": "^0.4.0",
+    "reconnecting-websocket": "^4.4.0",
     "tslib": "^2.3.1",
     "vue": "^3.2.25",
     "vue-class-component": "^8.0.0-0",
