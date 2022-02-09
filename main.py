@@ -1,6 +1,17 @@
-from typing import Optional, List, Dict
+import sys
+import os
+from pathlib import Path
+
+BASE_DIRECTORY=Path(__file__).parent
+
+sys.path.append(str(BASE_DIRECTORY.joinpath("dlls").absolute()))
+os.add_dll_directory(str(BASE_DIRECTORY.joinpath("dlls").absolute()))
+
+from typing import Optional, List, Dict, Any
+from multiprocessing import Process
 
 import uvicorn
+from PyQt5.QtWidgets import QApplication
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseSettings, Field, BaseModel
@@ -13,9 +24,11 @@ from tortoise import manager
 from tortoise.contrib.fastapi import HTTPNotFoundError, register_tortoise
 from tortoise.exceptions import DoesNotExist
 import mimetypes
-
+import random
 from models import FingerPrintModel
+from ui import MainWindow, TrayIcon, UiProcess
 from zk import FingerPrint
+
 
 mimetypes.init()
 mimetypes.add_type('application/javascript', '.js')
@@ -28,6 +41,8 @@ class Settings (BaseSettings):
     zk:FingerPrint = Field(default_factory=lambda : FingerPrint())
     connected_device:int=-1
     is_connected:bool=False
+    window:Any=None
+    test_mode:bool=True
 
 class WebSocketManager:
 
@@ -60,7 +75,8 @@ settings=Settings()
 
 origins = [
     "http://localhost:3000",
-    "http://127.0.0.1:8000"
+    "http://127.0.0.1:8000",
+    "*"
 ]
 
 app.add_middleware(
@@ -74,6 +90,7 @@ app.add_middleware(
 class FingerPrintMatchRequest(BaseModel):
     name:str
     template:str
+    status:int
 
 app.mount("/data", StaticFiles(directory="data/"), name="data")
 app.mount("/assets", StaticFiles(directory="data/assets/"), name="assets")
@@ -82,22 +99,19 @@ templates = Jinja2Templates(directory="data")
 
 @app.on_event('startup')
 async def on_startup() -> None:
-    pass
+    if settings.test_mode:
+        return
     FingerPrint.init_db()
     FingerPrint.re_init()
-    # settings.zk.open_device(0)
 
 
 @app.on_event('shutdown')
 async def on_shutdown() -> None:
-    pass
+    if settings.test_mode:
+        return
     FingerPrint.close_db()
-    # settings.zk.close_device()
+    settings.zk.close_device()
 
-# @app.get("/")
-# async def home():
-#     response = RedirectResponse(url='http://localhost:3000/#/')
-#     return response
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
@@ -112,6 +126,11 @@ def app_settings():
 
 @app.get("/devices")
 async def devices():
+    if settings.test_mode:
+        return {
+            "success": True,
+            "devices": 2
+        }
     FingerPrint.re_init()
     devices=settings.zk.available_devices()
     if devices>0:
@@ -128,6 +147,16 @@ async def devices():
 
 @app.get("/connect/{id}")
 async def connect(id:int):
+    if settings.test_mode:
+        if id<2:
+            settings.connected_device = id
+            settings.is_connected = True
+            return {"success": True}
+        else:
+            return {
+                "success": False,
+                "message": "Unable to connect"
+            }
     try:
         settings.zk.open_device(id)
         settings.connected_device=id
@@ -142,6 +171,10 @@ async def connect(id:int):
 
 @app.post("/disconnect")
 async def disconnect():
+    if settings.test_mode:
+        settings.is_connected = False
+        settings.connected_device = -1
+        return {"success": True}
     try:
         settings.zk.close_device()
         settings.is_connected=False
@@ -160,8 +193,6 @@ async def save_template(name:str):
     except DoesNotExist as e:
         instance=FingerPrintModel()
         instance.name=name
-    window_callback(window)
-
     await socket_manager.broadcast({
         "type": "START_FINGERPRINT_SCAN"
     })
@@ -185,10 +216,27 @@ async def save_template(name:str):
 @app.post("/match")
 async def match_fingerprint(data:FingerPrintMatchRequest):
     finger_template=data.template
+    if settings.test_mode:
+        status=data.status
+        await socket_manager.broadcast({
+            "type": "START_FINGERPRINT_SCAN"
+        })
+        result=0
+        if status==0:
+            result=random.randint(0,49)
+        else:
+            result=random.randint(50,100)
+        await socket_manager.broadcast({
+            "type": "FINISH_FINGERPRINT_SCAN",
+            "result": result
+        })
+        return {
+            "success": True,
+            "match": result
+        }
     instance=await FingerPrintModel.get(name=data.name)
     saved_template=instance.template
     if settings.zk.is_connected():
-        window_callback(window)
         await socket_manager.broadcast({
             "type": "START_FINGERPRINT_SCAN"
         })
@@ -230,11 +278,21 @@ register_tortoise(
     generate_schemas=True,
     add_exception_handlers=True,
 )
-def start_fast_api(window_handler,window_object):
-    global window,window_callback
-    window_callback=window_handler
-    window=window_object
-    uvicorn.run(app)
+
+
+
+def start_ui(settings):
+    settings=settings['settings']
+    app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
+    window = MainWindow()
+    window.resize(400, 600)
+    settings.window=window
+    trayIcon = TrayIcon(app, window)
+    app.exec_()
 
 if __name__ == '__main__':
+    # process=Process(target=start_ui,args=({"settings":settings},))
+    process=UiProcess()
+    process.start()
     uvicorn.run(app)

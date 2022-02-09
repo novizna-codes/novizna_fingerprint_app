@@ -12,10 +12,13 @@ uvicorn = "^0.17.0"
 tortoise-orm = "^0.18.1"
 pystray = "^0.19.2"
 "infi.systray" = "^0.1.12"
+PyQt5 = "^5.15.6"
+PyQtWebEngine = "^5.15.5"
 
 [tool.poetry.dev-dependencies]
 
 [build-system]
 requires = ["poetry-core>=1.0.0","nuitka"]
 build-backend = "nuitka.distutils.Build"
-#python -m nuitka --standalone main.py --follow-imports --include-package=anyio --include-package=tortoise --include-package=websockets --include-data-file=libzkfp.cp39-win_amd64.pyd=libzkfp.cp39-win_amd64.pyd --include-data-dir=data=data
+#python -m nuitka --standalone main.py --follow-imports --include-package=anyio --include-package=tortoise --include-package=websockets --include-data-file=libzksensorcore.dll=libzksensorcore.dll  --include-data-file=libzkfpcsharp.dll=libzkfpcsharp.dll --include-data-file=libzkfp.dll=libzkfp.dll --include-data-file=libzkfp.cp39-win_amd64.pyd=libzkfp.cp39-win_amd64.pyd --include-data-dir=data=data --enable-plugin=multiprocessing --enable-plugin=pyqt5
+#python -m nuitka -o LucrumAttendance.exe --standalone main.py --follow-imports --include-package=zk --include-package=anyio --include-package=tortoise --include-package=websockets --include-data-file=icon.png=icon.png  --include-data-dir=data=data --include-data-dir=dlls=dlls --enable-plugin=multiprocessing --enable-plugin=pyqt5 --windows-icon-from-ico=icon.ico
